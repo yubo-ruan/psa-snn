@@ -28,8 +28,9 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-# Set up virtual display for headless rendering
-os.environ["MUJOCO_GL"] = "egl"
+# Set up rendering backend (osmesa for headless, can override with MUJOCO_GL env var)
+if "MUJOCO_GL" not in os.environ:
+    os.environ["MUJOCO_GL"] = "osmesa"
 
 # Add LIBERO to path
 sys.path.insert(0, os.path.expanduser("~/LIBERO"))
