@@ -95,24 +95,20 @@ def extract_state(obs: dict) -> torch.Tensor:
     return torch.tensor(state, dtype=torch.float32)
 
 
-def load_demos_from_hdf5(demo_dir: str, task_name: str, max_demos: int = 10) -> List[List[Tuple]]:
-    """Load demonstrations from LIBERO HDF5 files."""
+def load_demos_from_path(demo_path: str, max_demos: int = 10) -> List[List[Tuple]]:
+    """Load demonstrations from LIBERO HDF5 file."""
     demos = []
-    demo_path = Path(demo_dir) / f"{task_name}_demo.hdf5"
 
-    if not demo_path.exists():
-        # Try alternate naming
-        demo_files = list(Path(demo_dir).glob(f"*{task_name}*.hdf5"))
-        if demo_files:
-            demo_path = demo_files[0]
-        else:
-            print(f"Warning: No demos found for {task_name}")
-            return demos
+    if not os.path.exists(demo_path):
+        print(f"Warning: Demo file not found: {demo_path}")
+        return demos
 
     try:
         with h5py.File(demo_path, 'r') as f:
             data = f['data']
-            demo_keys = sorted([k for k in data.keys() if k.startswith('demo')])[:max_demos]
+            # Sort demo keys numerically
+            demo_keys = sorted([k for k in data.keys() if k.startswith('demo')],
+                             key=lambda x: int(x.split('_')[1]))[:max_demos]
 
             for demo_key in demo_keys:
                 demo = data[demo_key]
@@ -142,6 +138,12 @@ def load_demos_from_hdf5(demo_dir: str, task_name: str, max_demos: int = 10) -> 
         print(f"Error loading demos from {demo_path}: {e}")
 
     return demos
+
+
+def load_demos_from_hdf5(demo_dir: str, task_name: str, max_demos: int = 10) -> List[List[Tuple]]:
+    """Load demonstrations from LIBERO HDF5 files (legacy, for backward compat)."""
+    demo_path = Path(demo_dir) / f"{task_name}_demo.hdf5"
+    return load_demos_from_path(str(demo_path), max_demos)
 
 
 def create_env(task, render: bool = False) -> OffScreenRenderEnv:
@@ -255,20 +257,24 @@ def train_on_suite(
         print(f"Training on {suite_name} ({num_tasks} tasks, {demos_per_task} demos each)...")
 
     # Load demos
-    demo_dir = os.environ.get("LIBERO_FOLDER", "~/libero_data")
+    demo_dir = os.environ.get("LIBERO_FOLDER", os.path.expanduser("~/libero_data"))
     all_demos = {}
 
     for task_idx in range(num_tasks):
         task = bm.get_task(task_idx)
         task_name = task_names[task_idx]
 
+        # Get demo path from benchmark
+        demo_rel_path = bm.get_task_demonstration(task_idx)
+        demo_full_path = os.path.join(demo_dir, demo_rel_path)
+
         # Try to load real demos
-        demos = load_demos_from_hdf5(demo_dir, task_name, demos_per_task)
+        demos = load_demos_from_path(demo_full_path, demos_per_task)
 
         if len(demos) == 0:
             # Generate synthetic demos as fallback
             print(f"  Using synthetic demos for {task_name}")
-            demos = generate_synthetic_demos(task_idx, demos_per_task)
+            demos = generate_synthetic_demos(task_idx, demos_per_task, action_dim=7)
         else:
             print(f"  Loaded {len(demos)} demos for {task_name}")
 
@@ -309,7 +315,7 @@ def train_on_suite(
     return {'train_history': train_history, 'task_names': task_names}
 
 
-def generate_synthetic_demos(task_idx: int, num_demos: int = 10, demo_length: int = 50) -> List[List[Tuple]]:
+def generate_synthetic_demos(task_idx: int, num_demos: int = 10, demo_length: int = 50, action_dim: int = 7) -> List[List[Tuple]]:
     """Generate synthetic demos as fallback."""
     demos = []
     np.random.seed(task_idx * 1000)
@@ -322,13 +328,13 @@ def generate_synthetic_demos(task_idx: int, num_demos: int = 10, demo_length: in
         target[task_idx % 10] = 0.5
 
         for _ in range(demo_length):
-            error = target[:4] - state[:4]
-            action = 0.3 * error + torch.randn(4) * 0.02
+            error = target[:action_dim] - state[:action_dim]
+            action = 0.3 * error + torch.randn(action_dim) * 0.02
             action = torch.clamp(action, -1, 1)
 
             next_state = state.clone()
-            next_state[:4] = state[:4] + action * 0.1
-            next_state[4:] = state[4:] * 0.95
+            next_state[:action_dim] = state[:action_dim] + action[:min(action_dim, 10)] * 0.1
+            next_state[action_dim:] = state[action_dim:] * 0.95 if action_dim < 10 else state[action_dim:]
 
             trajectory.append((state.clone(), action.clone(), next_state.clone()))
             state = next_state
