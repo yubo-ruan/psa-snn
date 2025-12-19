@@ -28,6 +28,9 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+# Set up device
+DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
 # Set up rendering backend (osmesa for headless, can override with MUJOCO_GL env var)
 if "MUJOCO_GL" not in os.environ:
     os.environ["MUJOCO_GL"] = "osmesa"
@@ -52,6 +55,7 @@ print("PSA-SNN LIBERO EVALUATION (Real Environment)")
 print("=" * 70)
 print(f"Start time: {datetime.now()}")
 print(f"Output directory: {OUTPUT_DIR}")
+print(f"Device: {DEVICE}")
 print()
 
 
@@ -61,11 +65,11 @@ print()
 
 def get_task_embedding(task_idx: int, num_tasks: int = 10) -> torch.Tensor:
     """Create structured task embedding."""
-    embed = torch.zeros(32)
+    embed = torch.zeros(32, device=DEVICE)
     # Structured embedding based on task
     embed[task_idx % 16] = 1.0
     embed[16 + (task_idx * 7) % 16] = 1.0
-    embed = embed + torch.randn(32) * 0.1
+    embed = embed + torch.randn(32, device=DEVICE) * 0.1
     return embed
 
 
@@ -93,7 +97,7 @@ def extract_state(obs: dict) -> torch.Tensor:
     elif len(state) < 10:
         state = np.pad(state, (0, 10 - len(state)))
 
-    return torch.tensor(state, dtype=torch.float32)
+    return torch.tensor(state, dtype=torch.float32, device=DEVICE)
 
 
 def load_demos_from_path(demo_path: str, max_demos: int = 10) -> List[List[Tuple]]:
@@ -121,7 +125,7 @@ def load_demos_from_path(demo_path: str, max_demos: int = 10) -> List[List[Tuple
                     # Extract state at timestep i
                     state_dict = {k: obs_data[k][i] for k in obs_data.keys()}
                     state = extract_state(state_dict)
-                    action = torch.tensor(actions[i], dtype=torch.float32)
+                    action = torch.tensor(actions[i], dtype=torch.float32, device=DEVICE)
 
                     # Next state
                     if i + 1 < len(actions):
@@ -200,8 +204,8 @@ def evaluate_episode(
 
         actions.append(action.clone())
 
-        # Execute action
-        obs, reward, done, info = env.step(action.numpy())
+        # Execute action (move to CPU for environment)
+        obs, reward, done, info = env.step(action.cpu().numpy())
         state = extract_state(obs)
         total_reward += reward
 
@@ -328,14 +332,14 @@ def generate_synthetic_demos(task_idx: int, num_demos: int = 10, demo_length: in
 
     for _ in range(num_demos):
         trajectory = []
-        state = torch.randn(10) * 0.3
+        state = torch.randn(10, device=DEVICE) * 0.3
 
-        target = torch.zeros(10)
+        target = torch.zeros(10, device=DEVICE)
         target[task_idx % 10] = 0.5
 
         for _ in range(demo_length):
             error = target[:action_dim] - state[:action_dim]
-            action = 0.3 * error + torch.randn(action_dim) * 0.02
+            action = 0.3 * error + torch.randn(action_dim, device=DEVICE) * 0.02
             action = torch.clamp(action, -1, 1)
 
             next_state = state.clone()
@@ -443,7 +447,7 @@ def eval_suite_level(suite_name: str = "libero_10") -> Dict:
 
     model = LanguageConditionedPSA(
         obs_dim=10, action_dim=7, num_neurons=128, language_dim=32, readout_hidden=64,
-    )
+    ).to(DEVICE)
 
     train_results = train_on_suite(model, suite_name, demos_per_task=10, num_epochs=30)
     eval_results = evaluate_on_suite(model, suite_name, num_episodes=5,
@@ -466,7 +470,7 @@ def eval_forward_transfer(suite_a: str = "libero_spatial", suite_b: str = "liber
     print("\n--- Pretrained + Transfer ---")
     model_pre = LanguageConditionedPSA(
         obs_dim=10, action_dim=7, num_neurons=128, language_dim=32, readout_hidden=64,
-    )
+    ).to(DEVICE)
 
     print("Pretraining on Suite A...")
     train_on_suite(model_pre, suite_a, num_epochs=30, verbose=False)
@@ -485,7 +489,7 @@ def eval_forward_transfer(suite_a: str = "libero_spatial", suite_b: str = "liber
     print("\n--- From Scratch ---")
     model_scratch = LanguageConditionedPSA(
         obs_dim=10, action_dim=7, num_neurons=128, language_dim=32, readout_hidden=64,
-    )
+    ).to(DEVICE)
 
     print("Training on Suite B from scratch...")
     train_on_suite(model_scratch, suite_b, num_epochs=30, verbose=False)
@@ -513,7 +517,7 @@ def eval_forgetting(suites: List[str] = ["libero_spatial", "libero_object", "lib
 
     model = LanguageConditionedPSA(
         obs_dim=10, action_dim=7, num_neurons=128, language_dim=32, readout_hidden=64,
-    )
+    ).to(DEVICE)
 
     results = {'psa': {}}
 
@@ -551,7 +555,7 @@ def eval_sample_efficiency(suite_name: str = "libero_10") -> Dict:
 
         model = LanguageConditionedPSA(
             obs_dim=10, action_dim=7, num_neurons=128, language_dim=32, readout_hidden=64,
-        )
+        ).to(DEVICE)
 
         train_on_suite(model, suite_name, demos_per_task=num_demos, num_epochs=30, verbose=False)
 
