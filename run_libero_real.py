@@ -146,10 +146,15 @@ def load_demos_from_hdf5(demo_dir: str, task_name: str, max_demos: int = 10) -> 
     return load_demos_from_path(str(demo_path), max_demos)
 
 
-def create_env(task, render: bool = False) -> OffScreenRenderEnv:
-    """Create LIBERO environment for a task."""
+def create_env(bddl_file_path: str, render: bool = False) -> OffScreenRenderEnv:
+    """Create LIBERO environment for a task.
+
+    Args:
+        bddl_file_path: Full path to the BDDL file
+        render: Whether to use higher resolution for video recording
+    """
     env = OffScreenRenderEnv(
-        bddl_file=task.bddl_file,
+        bddl_file_name=bddl_file_path,
         camera_heights=256 if render else 128,
         camera_widths=256 if render else 128,
         has_renderer=False,
@@ -369,8 +374,11 @@ def evaluate_on_suite(
         task_name = task_names[task_idx]
         task_embed = get_task_embedding(task_idx, num_tasks)
 
+        # Get full BDDL file path
+        bddl_file_path = bm.get_task_bddl_file_path(task_idx)
+
         # Create environment
-        env = create_env(task, render=record_videos)
+        env = create_env(bddl_file_path, render=record_videos)
 
         successes = 0
         task_jerks = []
