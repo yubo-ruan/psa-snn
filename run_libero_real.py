@@ -246,9 +246,10 @@ def train_on_suite(
     verbose: bool = True,
 ) -> Dict:
     """Train model on all tasks in a suite using real demos."""
-    bm = benchmark.get_benchmark(suite_name)
+    bm_class = benchmark.get_benchmark(suite_name)
+    bm = bm_class(0)  # Instantiate with task_order_index=0
     task_names = bm.get_task_names()
-    num_tasks = len(task_names)
+    num_tasks = bm.n_tasks
 
     if verbose:
         print(f"Training on {suite_name} ({num_tasks} tasks, {demos_per_task} demos each)...")
@@ -346,9 +347,10 @@ def evaluate_on_suite(
     verbose: bool = True,
 ) -> Dict:
     """Evaluate model on all tasks using real LIBERO environments."""
-    bm = benchmark.get_benchmark(suite_name)
+    bm_class = benchmark.get_benchmark(suite_name)
+    bm = bm_class(0)  # Instantiate with task_order_index=0
     task_names = bm.get_task_names()
-    num_tasks = len(task_names)
+    num_tasks = bm.n_tasks
 
     if verbose:
         print(f"\nEvaluating on {suite_name} ({num_tasks} tasks)...")
