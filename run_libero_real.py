@@ -447,7 +447,7 @@ def eval_suite_level(suite_name: str = "libero_10") -> Dict:
 
     train_results = train_on_suite(model, suite_name, demos_per_task=10, num_epochs=30)
     eval_results = evaluate_on_suite(model, suite_name, num_episodes=10,
-                                     record_videos=True, video_prefix="suite_")
+                                     record_videos=False, video_prefix="suite_")
 
     print(f"\n--- Results ---")
     print(f"Mean Success: {eval_results['mean_success']*100:.1f}% ± {eval_results['std_success']*100:.1f}%")
@@ -479,7 +479,7 @@ def eval_forward_transfer(suite_a: str = "libero_spatial", suite_b: str = "liber
     train_on_suite(model_pre, suite_b, num_epochs=15, verbose=False)
 
     pre_results = evaluate_on_suite(model_pre, suite_b, num_episodes=5,
-                                    record_videos=True, video_prefix="transfer_pre_")
+                                    record_videos=False, video_prefix="transfer_pre_")
 
     # From scratch
     print("\n--- From Scratch ---")
@@ -491,7 +491,7 @@ def eval_forward_transfer(suite_a: str = "libero_spatial", suite_b: str = "liber
     train_on_suite(model_scratch, suite_b, num_epochs=30, verbose=False)
 
     scratch_results = evaluate_on_suite(model_scratch, suite_b, num_episodes=5,
-                                        record_videos=True, video_prefix="transfer_scratch_")
+                                        record_videos=False, video_prefix="transfer_scratch_")
 
     print(f"\n--- Results ---")
     print(f"Pretrained + Transfer: {pre_results['mean_success']*100:.1f}%")
