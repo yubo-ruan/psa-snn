@@ -158,7 +158,7 @@ def create_env(bddl_file_path: str, render: bool = False) -> OffScreenRenderEnv:
         camera_heights=256 if render else 128,
         camera_widths=256 if render else 128,
         has_renderer=False,
-        has_offscreen_renderer=True,
+        has_offscreen_renderer=False,  # Disable to avoid EGL issues on headless
     )
     return env
 
