@@ -30,8 +30,13 @@ sys.path.insert(0, os.path.expanduser("~/LIBERO"))
 
 os.environ.setdefault("LIBERO_FOLDER", os.path.expanduser("~/libero_data"))
 
-from libero.libero import benchmark
-from libero.libero.envs import OffScreenRenderEnv
+# Import LIBERO benchmark (but not env which requires OpenGL)
+try:
+    from libero.libero import benchmark
+    LIBERO_AVAILABLE = True
+except ImportError:
+    LIBERO_AVAILABLE = False
+    print("Warning: LIBERO not fully available, using simulated benchmark")
 
 from psa.language_conditioned import LanguageConditionedPSA
 
